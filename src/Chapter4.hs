@@ -114,22 +114,23 @@ As always, try to guess the output first! And don't forget to insert
 the output in here:
 
 >>> :k Char
-
+Char :: *
 >>> :k Bool
-
+Bool :: *
 >>> :k [Int]
-
+[Int] :: *
 >>> :k []
-
+[] :: * -> *
 >>> :k (->)
-
+(->) :: * -> * -> *
 >>> :k Either
-
+Either :: * -> * -> *
 >>> data Trinity a b c = MkTrinity a b c
 >>> :k Trinity
-
+Trinity :: * -> * -> * -> *
 >>> data IntBox f = MkIntBox (f Int)
 >>> :k IntBox
+IntBox :: (* -> *) -> *
 
 -}
 
@@ -293,7 +294,8 @@ values and apply them to the type level?
 -}
 instance Functor (Secret e) where
     fmap :: (a -> b) -> Secret e a -> Secret e b
-    fmap = error "fmap for Box: not implemented!"
+    fmap _ (Trap e) = Trap e
+    fmap f (Reward a) = Reward (f a)
 
 {- |
 =⚔️= Task 3
@@ -306,6 +308,11 @@ typeclasses for standard data types.
 data List a
     = Empty
     | Cons a (List a)
+
+instance Functor List where
+    fmap :: (a -> b) -> List a -> List b
+    fmap _ Empty = Empty
+    fmap f (Cons x xs) = Cons (f x) (fmap f xs)
 
 {- |
 =🛡= Applicative
@@ -400,7 +407,7 @@ instance Applicative Maybe where
     pure :: a -> Maybe a
     pure = Just
 
-    (<*>) :: Maybe (a -> b) -> Maybe a -> Maybe b
+    (<*>) :: Just (a -> b) -> Just a -> Just b
     Nothing <*> _ = Nothing
     Just f <*> x = fmap f x
 @
@@ -472,10 +479,11 @@ Implement the Applicative instance for our 'Secret' data type from before.
 -}
 instance Applicative (Secret e) where
     pure :: a -> Secret e a
-    pure = error "pure Secret: Not implemented!"
+    pure = Reward
 
     (<*>) :: Secret e (a -> b) -> Secret e a -> Secret e b
-    (<*>) = error "(<*>) Secret: Not implemented!"
+    Trap e <*> _ = Trap e
+    Reward f <*> x = fmap f x
 
 {- |
 =⚔️= Task 5
@@ -489,6 +497,18 @@ Implement the 'Applicative' instance for our 'List' type.
   type.
 -}
 
+instance Applicative List where
+    pure :: a -> List a
+    pure x = Cons x Empty
+
+    (<*>) :: List (a -> b) -> List a -> List b
+    Empty <*> _ = Empty
+    _ <*> Empty = Empty
+    Cons f fs <*> l = append (fmap f l) (fs <*> l)
+
+append :: List a -> List a -> List a
+append Empty ys = ys
+append (Cons x xs) ys = Cons x (append xs ys)
 
 {- |
 =🛡= Monad
@@ -519,7 +539,7 @@ the (>>=) operator called __bind__.
  gold, we can take all our gold and buy a new chest using our
  gold. The remaining gold can be put to the new chest. The amount of
  money we have determines the quality of our new chest. And this is
- what monad is about — the next context can depend on the value in the
+ what the monad about — next context can depend on the value in the
  current context.
 
 And to expand a bit more on why you need to have the 'Applicative'
@@ -533,7 +553,7 @@ To describe the same in more technical words, The bind (>>=) operator
 takes a value of the type 'f a' ('a' in the 'f' context), a function
 from 'a' to 'f b' ('b' in the 'f' context), and returns a value of
 type 'f b'. So, to understand what it means, let's get back to our
-example with 'Maybe'. But first, we need to get a function somewhere
+example with 'Maybe'. But first, we need to get somewhere a function
 that we would be able to use for the second argument of (>>=) in our
 examples.
 
@@ -577,7 +597,7 @@ when I was a kid, but in reality, there is Nothing special in it!
 Could I even name myself a Monad conqueror now? (Of course, you can,
 but after you try to implement the instances in the exercises)
 
-On a general note, you can notice some similarities between the main
+On the general note, you can notice some similarities between the main
 methods of all three typeclasses:
 
 @
@@ -600,7 +620,8 @@ Implement the 'Monad' instance for our 'Secret' type.
 -}
 instance Monad (Secret e) where
     (>>=) :: Secret e a -> (a -> Secret e b) -> Secret e b
-    (>>=) = error "bind Secret: Not implemented!"
+    Trap e >>= _ = Trap e
+    Reward a >>= f = f a
 
 {- |
 =⚔️= Task 7
@@ -611,6 +632,13 @@ Implement the 'Monad' instance for our lists.
   maybe a few) to flatten lists of lists to a single list.
 -}
 
+instance Monad List where
+    (>>=) :: List a -> (a -> List b) -> List b
+    l >>= f = concatList (fmap f l)
+
+concatList :: List (List a) -> List a
+concatList Empty = Empty
+concatList (Cons x xs) = append x (concatList xs)
 
 {- |
 =💣= Task 8*: Before the Final Boss
@@ -629,7 +657,7 @@ Can you implement a monad version of AND, polymorphic over any monad?
 🕯 HINT: Use "(>>=)", "pure" and anonymous function
 -}
 andM :: (Monad m) => m Bool -> m Bool -> m Bool
-andM = error "andM: Not implemented!"
+andM ma mb = ma >>= \a -> if a then mb else pure False
 
 {- |
 =🐉= Task 9*: Final Dungeon Boss
@@ -659,13 +687,13 @@ You can also support creators of this course and your proud mentors on GitHub:
   ✧ https://github.com/sponsors/vrom911
   ✧ https://github.com/sponsors/chshersh
 
-Now, for the dessert, it is time to test your skills on the final boss!
+Now, for the desert, it is time to test your skills on the final boss!
 Your task now will be to implement a Binary Tree data structure and
 some functions on it.
 
 Specifically,
 
- ❃ Implement a polymorphic binary tree type that can store any
+ ❃ Implement the polymorphic binary tree type that can store any
    elements inside its nodes
  ❃ Implement the Functor instance for Tree
  ❃ Implement the reverseTree function that reverses the tree and each
@@ -675,6 +703,23 @@ Specifically,
 
 
 {-
-You did it! Now it is time to open pull request with your changes
+You did it! Now it is time to the open pull request with your changes
 and summon @vrom911 and @chshersh for the review!
 -}
+
+data Tree a
+    = Leaf
+    | Node a (Tree a) (Tree a)
+
+instance Functor Tree where
+    fmap :: (a -> b) -> Tree a -> Tree b
+    fmap _ Leaf = Leaf
+    fmap f (Node x l r) = Node (f x) (fmap f l) (fmap f r)
+
+reverseTree :: Tree a -> Tree a
+reverseTree Leaf = Leaf
+reverseTree (Node x l r) = Node x (reverseTree r) (reverseTree l)
+
+treeToList :: Tree a -> [a]
+treeToList Leaf = []
+treeToList (Node x l r) = x : treeToList l ++ treeToList r
